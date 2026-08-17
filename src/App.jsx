@@ -51,6 +51,10 @@ export default function App() {
     } catch (err) {
       if (err.name === 'AbortError') return
       setError(err.message)
+      // If the very first load fails there's nothing on screen at all, which
+      // makes the app look broken rather than blocked. Show the bundled posts
+      // instead - the banner above them says plainly that they aren't live.
+      if (!data) showSample(true)
     } finally {
       if (request.current === controller) setLoading(false)
     }
@@ -62,10 +66,12 @@ export default function App() {
     return () => request.current?.abort()
   }, [])
 
-  function showSample() {
+  // keepError is for the automatic fallback above, where the error explains
+  // why you're looking at sample data in the first place.
+  function showSample(keepError = false) {
     request.current?.abort()
     setLoading(false)
-    setError(null)
+    if (!keepError) setError(null)
     setSub(SAMPLE_SUB)
     setData(analyzePosts(samplePosts))
     setIsSample(true)
@@ -138,7 +144,7 @@ export default function App() {
               r/{preset}
             </button>
           ))}
-          <button className="chip" onClick={showSample}>
+          <button className="chip" onClick={() => showSample()}>
             Use sample data
           </button>
         </div>
@@ -147,7 +153,7 @@ export default function App() {
       {error && (
         <div className="notice error">
           <strong>Couldn't load that.</strong> {error}{' '}
-          <button className="chip" onClick={showSample}>
+          <button className="chip" onClick={() => showSample()}>
             Use sample data instead
           </button>
         </div>
