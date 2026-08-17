@@ -48,6 +48,10 @@ const extras = {
   drama: -2,
   rant: -2,
   cope: -1,
+  // AFINN scores "no" at -1, but in a title it's nearly always grammar rather
+  // than feeling - "no one ever admits", "the one no one talks about". VADER
+  // treats it as a negation word instead of a sentiment word, same idea.
+  no: 0,
   // AFINN reads these as insults, but on reddit they usually mean "impressive"
   sick: 0,
   insane: 0,
