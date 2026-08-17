@@ -74,17 +74,27 @@ async function viaScrapeCreators(subreddit, limit) {
     return res.json()
   }
 
-  const first = await call()
-  let posts = first.posts || []
+  // A page holds about 25, so getting to 50 takes a few. Each uncached page is
+  // a credit, so stop the moment there are enough - and stop early either way,
+  // because the whole function has to finish inside Vercel's 10 seconds.
+  const startedAt = Date.now()
+  let posts = []
+  let after = null
 
-  // One page is often short of 50, so take a second if there's more to get.
-  if (posts.length < limit && first.after) {
+  for (let page = 0; page < 4; page++) {
+    let data
     try {
-      const second = await call(first.after)
-      posts = posts.concat(second.posts || [])
-    } catch {
-      // a short listing is still worth showing
+      data = await call(after)
+    } catch (err) {
+      if (!posts.length) throw err // nothing at all, let the caller know
+      break // a short listing still beats no listing
     }
+
+    posts = posts.concat(data.posts || [])
+    after = data.after
+
+    if (posts.length >= limit || !after) break
+    if (Date.now() - startedAt > 6000) break
   }
 
   return {

@@ -136,8 +136,9 @@ the response comes back using Reddit's own field names (`ups`, `num_comments`,
 { kind: 'Listing', data: { children: posts.map((p) => ({ kind: 't3', data: p })) } }
 ```
 
-The frontend already parses that, so nothing in `src/` had to change at all. One page came
-back short of 50, so it pages once more to fill the set.
+The frontend already parses that, so nothing in `src/` had to change at all. Their pages
+hold about 25 posts, so it keeps requesting until it has 50, stopping early if the listing
+runs out or the clock gets close to Vercel's limit - each uncached page is a credit.
 
 ### 6. Where it ended up
 
@@ -147,7 +148,7 @@ The function tries four routes and returns the first real listing:
 |---|---|---|
 | 1 | `oauth.reddit.com` | official API, active as soon as credentials are set |
 | 2 | public `.json` endpoint | free, blocked from most clouds |
-| 3 | ScrapeCreators | fetches from its own IPs, 1 credit per uncached lookup |
+| 3 | ScrapeCreators | fetches from its own IPs, 1 credit per uncached page |
 | 4 | public relays | free, unreliable, last resort |
 
 Each route gets 4.5 seconds so the whole thing stays inside Vercel's 10 second function
