@@ -1,105 +1,94 @@
 # The Subreddit Vibe Check
 
-Type in a subreddit, and this pulls its top **hot** posts and works out the mood of every
-title in the browser. Built as my SportsOrca assignment.
+Pick a subreddit, and this reads the mood of its 50 hottest post titles.
 
 **Live:** https://sports-orca-assignment-alpha.vercel.app
 
 ![The dashboard scoring the top 50 hot posts of r/AskReddit](docs/dashboard.png)
 
-That's r/AskReddit at the moment I took the shot: 50 posts, mostly questions, which AFINN
-reads as slightly negative because "worst", "useless" and "sad" turn up more often than
-anything cheerful. [The full page](docs/full.png) carries on into the word drivers and the
-table of all 50 posts.
+That's r/AskReddit when I took the shot. It leans slightly negative, mostly because
+questions there tend to ask about the worst or saddest version of something.
+[The full page](docs/full.png) keeps going into the word lists and the table of all 50
+posts.
 
-## Running it locally
+## Running it
 
 ```bash
 npm install
 npm run dev
 ```
 
-Then open http://localhost:5173.
+Then open http://localhost:5173. Use `npm run dev` rather than opening a build, because the
+dev server is what fetches Reddit for you. More on that below.
 
 ```bash
 npm test
 ```
 
-33 tests, no test framework to install - Node's built-in runner. They cover the scoring
-(the neutral band, the reddit lexicon overrides, negation, that long titles don't read as
-more extreme than short ones) and the serverless proxy (route order, the OAuth token and
-its reuse, pagination, private subreddits, and that the API key never ends up in a URL).
-The proxy tests stub `fetch`, so nothing in the suite touches the network.
-
-Use `npm run dev` rather than opening a build - the dev server proxies Reddit, and without
-that proxy the browser blocks the request. The long version of why is below.
+33 tests, and nothing extra to install for them - Node has a test runner built in. They
+check the scoring rules and the fetching logic. Nothing in the suite touches the network.
 
 ## What it does
 
-- **Fetches** the top 50 hot posts of a subreddit from `/r/{subreddit}/hot`. No account
-  needed for the public endpoint.
-- **Scores every title** with the [`sentiment`](https://www.npmjs.com/package/sentiment)
-  package, which uses AFINN-165 - a list of about 3,300 English words each rated from -5
-  to +5. All of it runs client side.
-- **Shows the result** as one headline score, plus the mood split, the spread of scores,
-  average upvotes per mood, which words did the pushing, and a sortable table of every
-  post.
+1. Gets the top 50 hot posts of whatever subreddit you type in.
+2. Scores each title using a word list, in your browser.
+3. Shows the result: one headline number, the split between moods, the spread of scores,
+   which words caused it, and a table of every post.
 
-## How the scoring works
+## How the score works
 
-For each title, the library adds up the ratings of the words it recognises and divides by
-the word count (its `comparative` score). Dividing matters - otherwise a long title looks
-angrier than a short one just for having more words in it.
+It uses AFINN, a list of about 3,300 English words with a rating from -5 to +5. `awful` is
+-3, `wonderful` is +4. For each title, the ratings of the words it recognises get added up,
+then divided by how many words the title has. Dividing matters: without it, a long title
+looks angrier than a short one just for having more words in it.
 
-That comparative score is multiplied by 2 and clamped to **-1 to +1** so every post is on
-the same scale. Titles within 0.05 either side of zero count as neutral, which is the same
-cutoff VADER uses.
+Each title ends up between -1 and +1. Anything within 0.05 of zero counts as neutral. The
+big number on the dashboard is the average of all 50, times 100, so it runs from -100 to
++100.
 
-The **overall vibe score** is the average of all of them, times 100, so it runs from -100
-to +100.
+The word list was built from tweets and news, so it doesn't know how people write on
+reddit. I added the words I kept seeing that it had no opinion on, like `cringe`,
+`wholesome` and `ragebait`. I also had to overrule a few. It reads `sick`, `insane` and
+`crazy` as insults, when on reddit they usually mean the opposite. And it rates `no` as
+mildly negative, which is fair in "no, that's wrong" but not in a title like "the thing no
+one talks about" - that one was making half of r/AskReddit look grumpier than it is.
 
-AFINN was built from tweets and news, so it doesn't know much reddit vocabulary. I added a
-small extra lexicon in `src/lib/sentiment.js` for words that kept coming up - `cringe`,
-`wholesome`, `ragebait`, `banger` - and for a few AFINN gets backwards in this context:
-"sick", "insane" and "crazy" are usually compliments on reddit, so they're set to 0
-instead of negative.
+## Getting the data was the hard part
 
-## Getting the data out of Reddit
+This took far longer than the dashboard did, so here's what happened.
 
-This turned out to be the whole project, so it's worth writing down properly. Everything
-below is something I actually hit, in order.
+### The browser isn't allowed to ask Reddit
 
-### 1. The browser can't call Reddit at all
+Fetching `reddit.com/r/pics/hot.json` straight from the page doesn't work. Reddit doesn't
+give other websites permission to read its data from a browser, so the browser throws the
+response away before my code ever sees it. This is CORS, and no amount of frontend code
+gets around it. Something on my own server has to do the fetching instead.
 
-`fetch('https://www.reddit.com/r/pics/hot.json')` from the page fails. It's a cross-origin
-request and Reddit sends no `Access-Control-Allow-Origin` header, so the browser throws the
-response away. No amount of frontend code fixes this - the fix has to be something on my
-own origin doing the fetching.
+Locally, that's a proxy built into the dev server. The page asks localhost, localhost asks
+Reddit, and since the page and the proxy are the same website there's nothing to block.
+That worked straight away.
 
-Locally that's the Vite dev proxy in `vite.config.js`. The browser calls `/reddit/...` on
-localhost, the dev server calls Reddit, same origin, no CORS. That worked immediately.
+### Then I deployed it and it broke
 
-### 2. Deployed, it broke again - and the error was the clue
+The dev server proxy only exists while `npm run dev` is running. A deployed site doesn't
+have one, so I wrote a small backend function for Vercel to do the same job. Servers don't
+have the CORS restriction at all, so that should have been the end of it.
 
-The Vite proxy only exists while `npm run dev` is running. A deployed build has no proxy
-behind `/reddit/...`, so I wrote a Vercel serverless function (`api/reddit.js`) to do the
-same job in production. Servers don't enforce CORS, so in theory that should have been the
-end of it.
-
-It still failed, and this error is the important part:
+It still failed, with this:
 
 ```
 Unexpected token '<', "<body clas"... is not valid JSON
 ```
 
-That is not a CORS error. `JSON.parse` choked on HTML, which means the request *reached*
-Reddit and Reddit answered with a block page instead of data. So the problem had changed
-completely: CORS was solved, and now Reddit was refusing my server specifically.
+That's the useful bit. It means my code got HTML where it expected data - so the request
+did reach Reddit, and Reddit answered with a "no" page instead of posts. The original
+problem was solved and I had a different one: Reddit was refusing my server.
 
-### 3. Making the failure explain itself
+### I stopped guessing
 
-At this point I was guessing, so I stopped guessing. Every route the function tries now
-records why it failed, and the response says which one succeeded:
+Until then I was changing one thing and redeploying to see what happened, which is slow
+and tells you very little. So I made the function report itself. It tries each way of
+getting the data in turn, and if they all fail it says what each one said:
 
 ```json
 {
@@ -112,143 +101,134 @@ records why it failed, and the response says which one succeeded:
 }
 ```
 
-Successful responses carry `X-Fetched-Via: oauth | public | scrapecreators | allorigins`.
-Every experiment after this was one request and a glance at the output, instead of a
-redeploy and a shrug.
+When it works, the response says which route got the data. After that, checking an idea
+took one request instead of a redeploy.
 
-### 4. Things I ruled out
+### What I ruled out
 
-- **User-Agent.** The common advice is that Reddit blocks generic server fetches, which is
-  true, so I set the format Reddit's own rules ask for:
-  `web:vibe-check-dashboard:v1.0.0 (by /u/BigBag2433)`. Still 403. Necessary, not
-  sufficient. (I also learned the hard way that Reddit rejects OAuth client names
-  containing the word "reddit", so `subreddit-vibe-check` is not a legal app name.)
-- **Region.** Vercel put the function in `iad1`, AWS US-East, which is about the most
-  scraped-from IP range on the internet. I moved it to `bom1` with `vercel.json`. Still
-  403 - so this is cloud IP ranges generally, not one unlucky datacenter.
-- **Free CORS relays.** `allorigins` and `codetabs` both returned 522 or timed out. Fine as
-  a backstop, not something a submitted project should depend on.
-- **The official API.** `oauth.reddit.com` with an app-only token
-  (`grant_type=client_credentials`, so no account password is involved) is the correct
-  answer, and the code for it is written and tested. I couldn't finish it: creating the app
-  at `reddit.com/prefs/apps` returns a 500 for my account on both new and old Reddit. The
-  route is still first in line, so it starts working the moment credentials exist.
+- **The User-Agent.** Most advice says Reddit blocks requests that don't identify
+  themselves, which is true, so I set the exact format Reddit asks for. Still refused.
+  Needed, but not enough on its own.
+- **Where the server runs.** Vercel had put my function in Virginia, on Amazon's servers,
+  probably the most scraped-from range of addresses there is. I moved it to Mumbai. Still
+  refused, so this is about cloud servers generally, not one unlucky location.
+- **Free relay services.** Two of them, both timed out. Fine as a last resort, not
+  something to hand in.
+- **Reddit's official API.** This is the proper answer, and the code for it is written and
+  tested. It uses an app token, so it never needs my account password. I couldn't finish
+  it: the page for registering an app returns a server error on my account, on both old
+  and new Reddit, so I can't get the credentials. It's still the first thing the function
+  tries, so it starts working the day that's sorted out.
 
-### 5. What actually fixed it
+### What actually worked
 
-I went looking at how other people fetch Reddit from serverless functions - Stack Overflow,
-Reddit's own developer subreddits, GitHub. The thing that helped was
+I went looking for how other people fetch Reddit from a server - Stack Overflow, Reddit's
+own developer subreddits, GitHub. What helped was
 [mikefutia/reddit-research-agent](https://github.com/mikefutia/reddit-research-agent), a
-Claude skill for turning Reddit threads into research. I read through its fetch script
-expecting a clever header trick, and found something better: it never calls Reddit at all.
-It goes through [ScrapeCreators](https://scrapecreators.com), which does the fetching from
-its own infrastructure. If someone else's machines make the request, the IP block isn't my
-problem.
+tool for turning Reddit threads into research notes. I read its fetching script expecting
+some clever trick with headers, and found something simpler: it doesn't ask Reddit at all.
+It goes through [ScrapeCreators](https://scrapecreators.com), which fetches Reddit on its
+own machines. If somebody else's server makes the request, being blocked isn't my problem.
 
-Their docs had exactly the endpoint I needed - `/v1/reddit/subreddit` with `sort=hot` - and
-the response comes back using Reddit's own field names (`ups`, `num_comments`,
-`created_utc`, `permalink`). So the function reshapes it into a normal Reddit listing:
+Their documentation had the endpoint I needed, sorted by hot, and it hands back the same
+field names Reddit uses. So my function rearranges its answer into the shape a normal
+Reddit response has, and the dashboard can't tell the difference - I didn't have to change
+a single file in `src/`. Their pages hold about 25 posts, so it asks for more until it has
+50.
 
-```js
-{ kind: 'Listing', data: { children: posts.map((p) => ({ kind: 't3', data: p })) } }
-```
+### Where it ended up
 
-The frontend already parses that, so nothing in `src/` had to change at all. Their pages
-hold about 25 posts, so it keeps requesting until it has 50, stopping early if the listing
-runs out or the clock gets close to Vercel's limit - each uncached page is a credit.
+The function tries these in order and uses the first one that answers properly:
 
-### 6. Where it ended up
-
-The function tries four routes and returns the first real listing:
-
-| # | Route | Notes |
+| | Route | Notes |
 |---|---|---|
-| 1 | `oauth.reddit.com` | official API, active as soon as credentials are set |
-| 2 | public `.json` endpoint | free, blocked from most clouds |
-| 3 | ScrapeCreators | fetches from its own IPs, 1 credit per uncached page |
-| 4 | public relays | free, unreliable, last resort |
+| 1 | Reddit's official API | works as soon as credentials exist |
+| 2 | Reddit's public data | free, but blocked from most servers |
+| 3 | ScrapeCreators | fetches from its own machines, costs a credit per page |
+| 4 | Free relays | free, unreliable, last resort |
 
-Each route gets 4.5 seconds so the whole thing stays inside Vercel's 10 second function
-limit. If every route fails, the app offers bundled sample data behind a banner, so the
-dashboard is never just a blank error page.
+Each one gets 4.5 seconds, because the whole function has to finish within 10. If they all
+fail, the app loads 50 bundled example posts instead, with a banner saying so, rather than
+showing a blank page with an error on it.
 
-Two things I'd carry into the next project. **The error text was the entire diagnosis** -
-`Unexpected token '<'` told me the request was arriving and being refused, which is a
-different bug from the one I thought I had. And **build the diagnostics before the fix**,
-because guessing at a deployed serverless function one redeploy at a time is miserable.
+Two things I'd do sooner next time. **Read the error properly** - `Unexpected token '<'`
+told me the request was arriving and being turned away, which is a different problem from
+the one I assumed I had. And **make the thing explain itself before trying to fix it**,
+because guessing at code running on someone else's server is slow going.
 
-Incidentally, live listings don't always return exactly 50 posts - the one I tested with
-gave 48 - so every count in the UI reads the real number rather than assuming.
+One small thing worth knowing: a live subreddit doesn't always give exactly 50 posts. One I
+tested returned 48. So every count on the dashboard shows the real number rather than
+assuming.
 
-## Deploying
+## Deploying it
 
-It's a Vite app with one serverless function, so Vercel needs no configuration - import the
-repo at [vercel.com/new](https://vercel.com/new) and the defaults are correct (framework
-Vite, build `npm run build`, output `dist`, functions from `api/`). Every push to `main`
-redeploys.
+It's a normal Vite app with one backend function, so Vercel needs no setup - import the
+repo at [vercel.com/new](https://vercel.com/new) and the defaults are right. Every push to
+`main` deploys again.
 
-Set **one** of these in Project → Settings → Environment Variables, then redeploy
-(environment variables don't apply to existing deployments):
+You need **one** of these, added under Project → Settings → Environment Variables. Then
+redeploy, because new variables only apply to new deployments.
 
-| Variable | Where it comes from |
+| Variable | Where to get it |
 |---|---|
 | `SCRAPECREATORS_API_KEY` | a key from [scrapecreators.com](https://scrapecreators.com) |
 | `REDDIT_CLIENT_ID` | the unlabelled string under the app name at [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps) |
-| `REDDIT_CLIENT_SECRET` | the `secret` field of the same app |
+| `REDDIT_CLIENT_SECRET` | the `secret` field on the same app |
 
-Create the Reddit app as type **script**; the redirect URI is required but never used, so
-`http://localhost:5173` is fine.
+If you're registering the Reddit app, choose type **script**. The redirect URL is required
+but never used, so `http://localhost:5173` is fine. The name can't contain the word
+"reddit" - Reddit rejects those, which is why mine is called `vibe-check-dashboard`.
 
-The ScrapeCreators route costs one credit per uncached lookup, so requests ask for a day of
-caching and responses are edge-cached for a minute. Without that, a shared link would burn
-through a free tier quickly.
+The ScrapeCreators route costs a credit each time it really fetches, so requests ask for a
+day of caching and answers are cached for a minute. Without that, a link a few people open
+would eat through a free allowance quickly.
 
-## Design notes
+## Choices I made
 
-- **Blue for positive, red for negative** instead of the obvious green/red. Green vs red is
-  exactly the pairing red-green colourblind readers can't separate, and that's about 8% of
-  men.
-- Every number in the charts is also in the table, so nothing is locked behind a colour or
-  a tooltip.
-- The mood bar is centred on neutral rather than starting at the left edge, so you can see
-  which way a subreddit leans at a glance. Both arms scale to whichever side is longer,
-  otherwise the bar overflows its card.
-- Dark and light mode each have their own colour steps rather than one being an inverted
-  version of the other.
-- The word-driver lists break ties by AFINN weight rather than alphabetically, so a list of
-  one-off words leads with the strongest one instead of whatever starts with "a".
+- **Blue for positive, red for negative**, not the obvious green and red. Green against red
+  is the one pair red-green colourblind readers can't tell apart, which is roughly one man
+  in twelve.
+- **Every number in the charts is in the table too**, so nothing depends on seeing a colour
+  or hovering over something.
+- **The mood bar is centred on neutral** rather than starting at the left, so you can see
+  which way a subreddit leans without reading the numbers.
+- **Dark and light mode have their own colours** rather than one being the other flipped
+  around.
+- **The word lists break ties by how strong a word is**, not alphabetically, so a list of
+  words that each appeared once leads with the strongest rather than whatever starts with
+  an "a".
 
-## Known limitations
+## What it can't do
 
-- It only reads **titles**, not post bodies or comments - that's what the assignment asked
-  for, but it means a cheerful title on a grim thread still scores positive.
-- A word list can't do sarcasm, negation ("not great") or context. The "titles with scored
-  words" tile shows how many titles AFINN recognised anything in at all; when that number
-  is low, the score means less. I'd rather show that than hide it.
-- Hot listings include pinned mod posts, which are usually neutral filler.
-- Route 3 depends on a third-party API with a credit budget, and route 4 on free services
-  that are often down. Route 1 is the only properly durable one.
+- It only reads **titles**, which is what the assignment asked for. A cheerful title on a
+  grim thread still scores as cheerful.
+- A word list can't understand sarcasm, or "not great", or context. The "titles with
+  scored words" figure shows how many titles it recognised anything in at all. When that's
+  low the score means less, and I'd rather show it than quietly hide it.
+- Hot listings include pinned moderator posts, which are usually neutral filler.
+- Route 3 costs credits and route 4 is often down. Route 1 is the only properly dependable
+  one, and it's the one I can't switch on yet.
 
-## Layout
+## Files
 
 ```
 src/
-  App.jsx                 state, search, loading and error handling
-  lib/reddit.js           choosing a route, fetching, parsing the listing
-  lib/sentiment.js        scoring, the extra lexicon, all the dashboard numbers
-  lib/sampleData.js       offline fallback posts
-  lib/format.js           number and date formatting
-  components/             one file per card on the dashboard
-api/reddit.js             serverless proxy, used by the deployed version
-vercel.json               pins the function to the Mumbai region
+  App.jsx                 state, search box, loading and errors
+  lib/reddit.js           picking a route, fetching, reading the response
+  lib/sentiment.js        scoring, the extra words, every number on the dashboard
+  lib/sampleData.js       the bundled example posts
+  lib/format.js           formatting numbers and dates
+  components/             one file per card
+api/reddit.js             the backend function the live site uses
+test/                     scoring and fetching tests
+vercel.json               runs the function in Mumbai
 ```
 
 ## Credits
 
 - [mikefutia/reddit-research-agent](https://github.com/mikefutia/reddit-research-agent) -
-  where I found the approach that got production working.
-- [ScrapeCreators](https://scrapecreators.com) - the Reddit fetching route that survives
-  cloud IP blocks.
-- [`sentiment`](https://www.npmjs.com/package/sentiment) and AFINN-165 - the word ratings.
+  where I found the approach that got the live version working.
+- [ScrapeCreators](https://scrapecreators.com) - fetches Reddit from its own machines.
+- [`sentiment`](https://www.npmjs.com/package/sentiment) and AFINN - the word ratings.
 
 Built with React and Vite.
