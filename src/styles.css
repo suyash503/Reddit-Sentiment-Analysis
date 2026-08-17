@@ -638,6 +638,22 @@ a {
   padding: 8px 0 4px;
 }
 
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px 40px;
+}
+
+.col-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  font-size: 13px;
+  font-weight: 560;
+  color: var(--ink-2);
+}
+
 /* ---------------- table ---------------- */
 
 .table-head {
@@ -805,6 +821,13 @@ td .meta {
   text-align: center;
 }
 
+.footer code {
+  font-size: 12px;
+  background: var(--hover);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
 /* ---------------- responsive ---------------- */
 
 @media (max-width: 940px) {
@@ -829,6 +852,9 @@ td .meta {
   }
   .row {
     grid-template-columns: 72px 1fr auto;
+  }
+  .two-col {
+    grid-template-columns: 1fr;
   }
 }
 
