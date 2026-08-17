@@ -60,11 +60,17 @@ Running locally:
 2. `/relay/...` - the dev proxy going through a public relay, for when Reddit 403s the
    network directly
 
-Deployed:
+Deployed, everything goes through `/api/reddit?subreddit=...`, the serverless function in
+`api/reddit.js`, which tries in this order:
 
-1. `/api/reddit?subreddit=...` - the serverless function in `api/reddit.js`, which does
-   the same job as the dev proxy and has its own fallbacks
-2. a public relay straight from the browser, if the function itself is down
+1. `oauth.reddit.com` - the official API, if credentials are set
+2. the public `.json` endpoint - free, but Reddit blocks most cloud IPs
+3. ScrapeCreators - a third-party API that fetches Reddit from its own machines, if a key
+   is set. It returns Reddit's own field names, so the function reshapes it into a normal
+   listing and the frontend can't tell the difference
+4. free public relays - no cost, frequently down
+
+If the function itself is unreachable the browser falls back to a relay directly.
 
 Each route gets 12 seconds before it moves on. If they all fail there's a **sample data**
 button that loads 50 bundled posts so the dashboard still demos; a banner makes it
@@ -87,6 +93,11 @@ API doesn't have that problem, so set two environment variables in Vercel:
 |---|---|
 | `REDDIT_CLIENT_ID` | the string under the app name at [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps) |
 | `REDDIT_CLIENT_SECRET` | the `secret` field of the same app |
+| `SCRAPECREATORS_API_KEY` | optional; a [scrapecreators.com](https://scrapecreators.com) key, used only if the two above fail |
+
+Either one is enough on its own. The ScrapeCreators route costs one credit per uncached
+lookup, so requests ask for a day of caching and responses are edge-cached for a minute -
+without that a shared link could burn through a free tier quickly.
 
 Create the app as type **script**. The redirect URI is required but never used, so
 `http://localhost:5173` is fine, and the app name can't contain the word "reddit" -
