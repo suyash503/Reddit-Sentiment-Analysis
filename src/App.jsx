@@ -19,14 +19,18 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [isSample, setIsSample] = useState(false)
-  const [theme, setTheme] = useState(() => localStorage.getItem('vibe-theme') || 'auto')
+  // start from whatever the OS is set to, then remember what the user picks
+  const [theme, setTheme] = useState(
+    () =>
+      localStorage.getItem('vibe-theme') ||
+      (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
+  )
 
   // keeps an old request from overwriting a newer one
   const request = useRef(null)
 
   useEffect(() => {
-    if (theme === 'auto') delete document.documentElement.dataset.theme
-    else document.documentElement.dataset.theme = theme
+    document.documentElement.dataset.theme = theme
     localStorage.setItem('vibe-theme', theme)
   }, [theme])
 

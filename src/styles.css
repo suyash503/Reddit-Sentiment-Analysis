@@ -434,11 +434,12 @@ a {
 }
 
 .extremes {
-  margin-top: 20px;
+  margin-top: 18px;
   border-top: 1px solid var(--line);
   padding-top: 14px;
   display: grid;
-  gap: 12px;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 32px;
 }
 
 .extreme .label {
@@ -853,7 +854,8 @@ td .meta {
   .row {
     grid-template-columns: 72px 1fr auto;
   }
-  .two-col {
+  .two-col,
+  .extremes {
     grid-template-columns: 1fr;
   }
 }
