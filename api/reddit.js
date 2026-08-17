@@ -16,14 +16,16 @@ const SOURCES = [
 ]
 
 export default async function handler(req, res) {
-  const sub = String(req.query.sub || '')
+  const subreddit = String(req.query.subreddit || '')
   const limit = Math.min(Number(req.query.limit) || 50, 100)
 
-  if (!/^[A-Za-z0-9][A-Za-z0-9_]{1,20}$/.test(sub)) {
+  // Checked before it goes anywhere near a URL - without this you can put
+  // slashes and query strings in the name and point the fetch somewhere else.
+  if (!/^[A-Za-z0-9][A-Za-z0-9_]{1,20}$/.test(subreddit)) {
     return res.status(400).json({ error: 'bad subreddit name' })
   }
 
-  const path = `r/${sub}/hot.json?limit=${limit}&raw_json=1`
+  const path = `r/${subreddit}/hot.json?limit=${limit}&raw_json=1`
   let lastError = 'unknown'
 
   for (const buildUrl of SOURCES) {

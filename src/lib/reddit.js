@@ -18,7 +18,7 @@ const SOURCES = import.meta.env.DEV
       (path) => `/relay/${relayed(path)}`, // vite proxy -> relay -> reddit
     ]
   : [
-      (_path, sub) => `/api/reddit?sub=${sub}&limit=50`, // our own function
+      (_path, sub) => `/api/reddit?subreddit=${sub}&limit=50`, // our own function
       (path) => `https://api.allorigins.win/${relayed(path)}`, // if that's down
     ]
 
