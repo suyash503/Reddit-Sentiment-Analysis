@@ -27,7 +27,6 @@ const extras = {
   congrats: 3,
   lmao: 2,
   lmfao: 2,
-  finally: 1,
   // negative
   cringe: -2,
   ragebait: -3,
@@ -92,8 +91,14 @@ export function scoreTitle(title) {
   }
 }
 
+// What AFINN rates a single word at, used to break ties sensibly.
+function weightOf(word) {
+  return sentiment.analyze(word, { extras }).score
+}
+
 // Counts every matched word so the dashboard can show what actually drove
-// the mood, instead of just a number.
+// the mood, instead of just a number. Most common first, and where two words
+// tie, the stronger one wins - "awful" is more interesting than "broke".
 function countWords(posts, key) {
   const counts = new Map()
   for (const post of posts) {
@@ -102,8 +107,13 @@ function countWords(posts, key) {
     }
   }
   return [...counts.entries()]
-    .map(([word, count]) => ({ word, count }))
-    .sort((a, b) => b.count - a.count || a.word.localeCompare(b.word))
+    .map(([word, count]) => ({ word, count, weight: weightOf(word) }))
+    .sort(
+      (a, b) =>
+        b.count - a.count ||
+        Math.abs(b.weight) - Math.abs(a.weight) ||
+        a.word.localeCompare(b.word),
+    )
     .slice(0, 7)
 }
 

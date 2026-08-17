@@ -25,7 +25,8 @@ function WordList({ items, tone, hoverProps }) {
               {...hoverProps(
                 <>
                   <b>&ldquo;{item.word}&rdquo;</b> appeared in {item.count} title
-                  {item.count === 1 ? '' : 's'}
+                  {item.count === 1 ? '' : 's'} &middot; rated {item.weight > 0 ? '+' : ''}
+                  {item.weight}
                 </>,
               )}
             />
