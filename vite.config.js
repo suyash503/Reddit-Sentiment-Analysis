@@ -16,7 +16,7 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/reddit/, ''),
         headers: {
-          'User-Agent': 'web:subreddit-vibe-check:v1.0.0 (by /u/BigBag2433)',
+          'User-Agent': 'web:vibe-check-dashboard:v1.0.0 (by /u/BigBag2433)',
         },
       },
       '/relay': {

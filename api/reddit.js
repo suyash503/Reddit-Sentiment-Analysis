@@ -11,7 +11,10 @@
 // credentials are configured we go through OAuth and everything else is just a
 // fallback for when they aren't.
 
-const UA = 'web:subreddit-vibe-check:v1.0.0 (by /u/BigBag2433)'
+// Reddit asks for platform:app-id:version (by /u/username), and the app id
+// should match the app registered at reddit.com/prefs/apps. It can't contain
+// the word "reddit" - Reddit rejects client names that do.
+const UA = 'web:vibe-check-dashboard:v1.0.0 (by /u/BigBag2433)'
 
 // Tokens last an hour, and a warm function can reuse one across requests.
 let cachedToken = null
