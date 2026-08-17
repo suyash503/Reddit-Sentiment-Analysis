@@ -51,17 +51,31 @@ Calling `www.reddit.com` straight from browser JavaScript fails: it's a cross-or
 request and Reddit sends no `Access-Control-Allow-Origin` header back. Reddit also
 returns 403 to plenty of networks even from a server.
 
-So `src/lib/reddit.js` tries three routes in order and keeps the first that returns a
-real listing:
+Something on our own origin has to do the fetching, so `src/lib/reddit.js` picks its
+routes based on where it's running and keeps the first that returns a real listing.
+
+Running locally:
 
 1. `/reddit/...` — the Vite dev proxy, same origin as the app, so CORS never applies
 2. `/relay/...` — the dev proxy going through a public relay, for when Reddit 403s the
    network directly
-3. the relay straight from the browser — only useful if you're serving a build
 
-Each route gets 12 seconds before it moves on. If all three fail there's a **sample data**
+Deployed:
+
+1. `/api/reddit?sub=...` — the serverless function in `api/reddit.js`, which does the same
+   job as the dev proxy and falls back to the relay itself
+2. the relay straight from the browser, if the function is down
+
+Each route gets 12 seconds before it moves on. If they all fail there's a **sample data**
 button that loads 50 bundled posts so the dashboard still demos; a banner makes it
 obvious that isn't live data.
+
+## Deploying
+
+It's a Vite app with one serverless function, so Vercel needs no configuration — import
+the repo at [vercel.com/new](https://vercel.com/new) and the defaults are correct
+(framework Vite, build `npm run build`, output `dist`, functions from `api/`). Every push
+to `main` redeploys.
 
 ## Design notes
 
@@ -97,6 +111,7 @@ src/
   lib/sampleData.js       offline fallback posts
   lib/format.js           number and date formatting
   components/             one file per card on the dashboard
+api/reddit.js             serverless proxy, used by the deployed version
 ```
 
 Built with React and Vite.

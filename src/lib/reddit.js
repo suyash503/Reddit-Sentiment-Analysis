@@ -3,19 +3,24 @@
 //
 // The annoying part is CORS: calling www.reddit.com straight from the browser
 // is a cross-origin request and Reddit sends no CORS header back, so it fails
-// every time. In dev the Vite proxy fixes that (see vite.config.js).
+// every time. Something on our own origin has to do the fetching.
 //
-// Reddit also 403s plenty of networks even server-side, so there's a relay as
-// backup. Each route is tried in order and the first one that returns a real
-// listing wins.
+// In dev that's the Vite proxy (vite.config.js); deployed it's the serverless
+// function in api/reddit.js. Reddit also 403s plenty of networks even
+// server-side, so both have a relay behind them. Routes are tried in order and
+// the first one that returns a real listing wins.
 const relayed = (path) =>
   `raw?url=${encodeURIComponent(`https://www.reddit.com/${path}`)}`
 
-const SOURCES = [
-  (path) => `/reddit/${path}`, // dev proxy -> reddit
-  (path) => `/relay/${relayed(path)}`, // dev proxy -> relay -> reddit
-  (path) => `https://api.allorigins.win/${relayed(path)}`, // static build, no proxy
-]
+const SOURCES = import.meta.env.DEV
+  ? [
+      (path) => `/reddit/${path}`, // vite proxy -> reddit
+      (path) => `/relay/${relayed(path)}`, // vite proxy -> relay -> reddit
+    ]
+  : [
+      (_path, sub) => `/api/reddit?sub=${sub}&limit=50`, // our own function
+      (path) => `https://api.allorigins.win/${relayed(path)}`, // if that's down
+    ]
 
 // Accepts "pics", "r/pics", "/r/pics/" or a full reddit URL.
 export function cleanName(input) {
@@ -63,7 +68,7 @@ export async function getHotPosts(input, signal) {
 
   for (const buildUrl of SOURCES) {
     try {
-      const res = await fetchWithTimeout(buildUrl(path), signal)
+      const res = await fetchWithTimeout(buildUrl(path, sub), signal)
 
       // Read the body first. A private subreddit still replies with JSON, and
       // in a built app /reddit/... has no proxy behind it so we get index.html
