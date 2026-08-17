@@ -1,16 +1,20 @@
 // Reddit hands back JSON if you stick .json on the end of any listing URL,
 // so /r/{sub}/hot.json?limit=50 is all we need. No login, no API key.
 //
-// The annoying part is CORS. Calling www.reddit.com straight from the browser
-// gets blocked, so in dev we go through the Vite proxy (see vite.config.js).
-// The other two are fallbacks for when the app is built and served statically.
+// The annoying part is CORS: calling www.reddit.com straight from the browser
+// is a cross-origin request and Reddit sends no CORS header back, so it fails
+// every time. In dev the Vite proxy fixes that (see vite.config.js).
+//
+// Reddit also 403s plenty of networks even server-side, so there's a relay as
+// backup. Each route is tried in order and the first one that returns a real
+// listing wins.
+const relayed = (path) =>
+  `raw?url=${encodeURIComponent(`https://www.reddit.com/${path}`)}`
+
 const SOURCES = [
-  (path) => `/reddit/${path}`, // vite dev proxy - same origin, no CORS
-  (path) => `https://www.reddit.com/${path}`, // works on some hosts
-  (path) =>
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(
-      `https://www.reddit.com/${path}`,
-    )}`, // last resort
+  (path) => `/reddit/${path}`, // dev proxy -> reddit
+  (path) => `/relay/${relayed(path)}`, // dev proxy -> relay -> reddit
+  (path) => `https://api.allorigins.win/${relayed(path)}`, // static build, no proxy
 ]
 
 // Accepts "pics", "r/pics", "/r/pics/" or a full reddit URL.
@@ -23,11 +27,35 @@ export function cleanName(input) {
     .split(/[/?#]/)[0]
 }
 
+// Something wrong with the subreddit itself, not the connection - no point
+// asking the next source the same question.
+function fatal(message) {
+  const err = new Error(message)
+  err.fatal = true
+  return err
+}
+
+// A dead relay can hang forever, which leaves the button stuck on "Checking...".
+// Give every route 12 seconds and then move on.
+async function fetchWithTimeout(url, signal, ms = 12000) {
+  const attempt = new AbortController()
+  const timer = setTimeout(() => attempt.abort(), ms)
+  const passAlong = () => attempt.abort()
+  signal?.addEventListener('abort', passAlong)
+
+  try {
+    return await fetch(url, { signal: attempt.signal })
+  } finally {
+    clearTimeout(timer)
+    signal?.removeEventListener('abort', passAlong)
+  }
+}
+
 export async function getHotPosts(input, signal) {
   const sub = cleanName(input)
-  if (!sub) throw new Error('Type a subreddit name first.')
+  if (!sub) throw fatal('Type a subreddit name first.')
   if (!/^[A-Za-z0-9][A-Za-z0-9_]{1,20}$/.test(sub)) {
-    throw new Error(`"${sub}" isn't a valid subreddit name.`)
+    throw fatal(`"${sub}" isn't a valid subreddit name.`)
   }
 
   const path = `r/${sub}/hot.json?limit=50&raw_json=1`
@@ -35,25 +63,32 @@ export async function getHotPosts(input, signal) {
 
   for (const buildUrl of SOURCES) {
     try {
-      const res = await fetch(buildUrl(path), { signal })
+      const res = await fetchWithTimeout(buildUrl(path), signal)
 
-      if (res.status === 404) throw new Error(`There's no subreddit called r/${sub}.`)
-      if (res.status === 403 || res.status === 401) {
-        throw new Error(`r/${sub} is private or restricted.`)
+      // Read the body first. A private subreddit still replies with JSON, and
+      // in a built app /reddit/... has no proxy behind it so we get index.html
+      // back with a 200 - res.json() would just blow up on both.
+      const body = await res.text()
+      let data = null
+      try {
+        data = JSON.parse(body)
+      } catch {
+        // not JSON, handled below
       }
-      if (res.status === 429) {
-        throw new Error('Reddit is rate limiting us. Give it a minute.')
-      }
-      if (!res.ok) throw new Error(`Reddit returned ${res.status}.`)
 
-      // Not res.json() - in a built app /reddit/... has no proxy behind it and
-      // we get index.html back with a 200, which would blow up here.
-      const data = JSON.parse(await res.text())
-
-      if (data.reason === 'private' || data.reason === 'quarantined') {
-        throw new Error(`r/${sub} is ${data.reason}, so we can't read it.`)
+      if (data?.reason === 'private' || data?.reason === 'quarantined') {
+        throw fatal(`r/${sub} is ${data.reason}, so we can't read it.`)
       }
-      if (data.kind !== 'Listing') throw new Error('That listing looks wrong.')
+      if (data?.reason === 'banned') throw fatal(`r/${sub} has been banned.`)
+      if (res.status === 404 || data?.error === 404) {
+        throw fatal(`There's no subreddit called r/${sub}.`)
+      }
+      if (res.status === 429) throw fatal('Reddit is rate limiting us. Give it a minute.')
+
+      // Reddit blocks a lot of networks outright with a 403, which is not the
+      // same as the subreddit being private - so let the next source try.
+      if (!res.ok) throw new Error(`got HTTP ${res.status}`)
+      if (data?.kind !== 'Listing') throw new Error('response was not a listing')
 
       const posts = data.data.children
         .filter((c) => c.kind === 't3')
@@ -72,21 +107,18 @@ export async function getHotPosts(input, signal) {
           nsfw: Boolean(p.over_18),
         }))
 
-      if (!posts.length) throw new Error(`r/${sub} has no hot posts right now.`)
+      if (!posts.length) throw fatal(`r/${sub} has no hot posts right now.`)
 
       return { sub, posts }
     } catch (err) {
-      if (err.name === 'AbortError') throw err
-      lastError = err
-      // A wrong/private subreddit is the same on every source, so don't retry.
-      if (/no subreddit|private|restricted|rate limiting|no hot posts/i.test(err.message)) {
-        throw err
-      }
+      if (signal?.aborted) throw err // the user searched for something else
+      if (err.fatal) throw err
+      lastError = err.name === 'AbortError' ? new Error('timed out') : err
     }
   }
 
   throw new Error(
-    `Couldn't reach Reddit (${lastError?.message || 'unknown error'}). ` +
-      'If the app is running from a build, start it with npm run dev instead.',
+    `Reddit didn't answer on any route (last try: ${lastError?.message || 'unknown'}). ` +
+      'It blocks some networks outright - try again in a minute, or use the sample data.',
   )
 }

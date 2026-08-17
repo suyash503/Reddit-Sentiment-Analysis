@@ -3,6 +3,10 @@ import react from '@vitejs/plugin-react'
 
 // The dev server proxies Reddit so the browser never makes a cross-origin call.
 // Reddit's API etiquette asks for a descriptive User-Agent that names the author.
+//
+// /relay is the backup: Reddit hands out 403s to a lot of networks (mine
+// included, on college wifi), and going through a public relay from the dev
+// server gets around it without the browser ever hitting CORS.
 export default defineConfig({
   plugins: [react()],
   server: {
@@ -14,6 +18,11 @@ export default defineConfig({
         headers: {
           'User-Agent': 'web:subreddit-vibe-check:v1.0.0 (by /u/BigBag2433)',
         },
+      },
+      '/relay': {
+        target: 'https://api.allorigins.win',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/relay/, ''),
       },
     },
   },
