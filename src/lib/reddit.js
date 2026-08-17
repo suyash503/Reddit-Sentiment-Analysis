@@ -64,7 +64,7 @@ export async function getHotPosts(input, signal) {
   }
 
   const path = `r/${sub}/hot.json?limit=50&raw_json=1`
-  let lastError = null
+  const failures = []
 
   for (const buildUrl of SOURCES) {
     try {
@@ -89,6 +89,10 @@ export async function getHotPosts(input, signal) {
         throw fatal(`There's no subreddit called r/${sub}.`)
       }
       if (res.status === 429) throw fatal('Reddit is rate limiting us. Give it a minute.')
+
+      // Our own function explains itself when it fails, so pass that along
+      // rather than a bare status code.
+      if (typeof data?.error === 'string') throw new Error(data.error)
 
       // Reddit blocks a lot of networks outright with a 403, which is not the
       // same as the subreddit being private - so let the next source try.
@@ -118,12 +122,12 @@ export async function getHotPosts(input, signal) {
     } catch (err) {
       if (signal?.aborted) throw err // the user searched for something else
       if (err.fatal) throw err
-      lastError = err.name === 'AbortError' ? new Error('timed out') : err
+      failures.push(err.name === 'AbortError' ? 'timed out' : err.message)
     }
   }
 
   throw new Error(
-    `Reddit didn't answer on any route (last try: ${lastError?.message || 'unknown'}). ` +
-      'It blocks some networks outright - try again in a minute, or use the sample data.',
+    `Couldn't get the posts - ${failures.join('; ')}. ` +
+      'Reddit blocks some networks outright. Try again in a minute, or use the sample data.',
   )
 }

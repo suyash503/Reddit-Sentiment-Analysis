@@ -77,6 +77,27 @@ the repo at [vercel.com/new](https://vercel.com/new) and the defaults are correc
 (framework Vite, build `npm run build`, output `dist`, functions from `api/`). Every push
 to `main` redeploys.
 
+### Reddit credentials (needed in production)
+
+Reddit serves an HTML block page to most datacenter IPs, so the anonymous `.json`
+endpoint usually fails from a deployed server even with a proper User-Agent. The official
+API doesn't have that problem, so set two environment variables in Vercel:
+
+| Variable | Where it comes from |
+|---|---|
+| `REDDIT_CLIENT_ID` | the string under the app name at [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps) |
+| `REDDIT_CLIENT_SECRET` | the `secret` field of the same app |
+
+Create the app as type **script**; the redirect URI is required but unused, so
+`http://localhost:5173` is fine. With both set, `api/reddit.js` requests an app-only
+token (`grant_type=client_credentials` — no account password involved), caches it while
+the function stays warm, and reads from `oauth.reddit.com`. Without them it falls back to
+the anonymous endpoint and public relays, which is fine locally and unreliable in the
+cloud.
+
+The response carries an `X-Fetched-Via` header saying which route served it, and a failure
+returns a `tried` array listing what each route said.
+
 ## Design notes
 
 - **Blue for positive, red for negative** instead of the obvious green/red. Green vs red
