@@ -42,8 +42,8 @@ export default function ScoreSpread({ data }) {
     <section className="card span-7">
       <h2>Spread of title scores</h2>
       <p className="sub">
-        How many of the 50 posts landed in each score band, from &minus;1 (bleak) to +1
-        (delighted).
+        How many of the {data.total} posts landed in each score band, from &minus;1
+        (bleak) to +1 (delighted).
       </p>
 
       <svg className="hist" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Histogram of title sentiment scores">

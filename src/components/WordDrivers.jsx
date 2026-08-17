@@ -45,8 +45,8 @@ export default function WordDrivers({ data }) {
     <section className="card span-12">
       <h2>What drove the score</h2>
       <p className="sub">
-        Most common scored words across the 50 titles, counted by how many titles each
-        appeared in.
+        Most common scored words across the {data.total} titles, counted by how many
+        titles each appeared in.
       </p>
 
       <div className="two-col">

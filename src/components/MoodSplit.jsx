@@ -31,7 +31,7 @@ export default function MoodSplit({ data }) {
 
   return (
     <section className="card span-8">
-      <h2>How the 50 titles split</h2>
+      <h2>How the {data.total} titles split</h2>
       <p className="sub">
         Share of posts in each mood, centred on neutral. Anything within &plusmn;0.05 of
         zero counts as neutral.

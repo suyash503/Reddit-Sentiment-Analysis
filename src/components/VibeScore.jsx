@@ -35,7 +35,7 @@ export default function VibeScore({ data, sub }) {
       </div>
 
       <p className="empty-note">
-        Scored from the top 50 hot posts in r/{sub}. Zero means the titles balanced
+        Scored from the top {data.total} hot posts in r/{sub}. Zero means the titles balanced
         out, not that nobody had an opinion.
       </p>
     </section>
