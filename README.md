@@ -5,6 +5,13 @@ title in the browser. Built as my SportsOrca assignment.
 
 **Live:** https://sports-orca-assignment-alpha.vercel.app
 
+![The dashboard scoring the top 50 hot posts of r/AskReddit](docs/dashboard.png)
+
+That's r/AskReddit at the moment I took the shot: 50 posts, mostly questions, which AFINN
+reads as slightly negative because "worst", "useless" and "sad" turn up more often than
+anything cheerful. [The full page](docs/full.png) carries on into the word drivers and the
+table of all 50 posts.
+
 ## Running it locally
 
 ```bash
