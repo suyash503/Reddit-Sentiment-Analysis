@@ -21,6 +21,16 @@ npm run dev
 
 Then open http://localhost:5173.
 
+```bash
+npm test
+```
+
+33 tests, no test framework to install - Node's built-in runner. They cover the scoring
+(the neutral band, the reddit lexicon overrides, negation, that long titles don't read as
+more extreme than short ones) and the serverless proxy (route order, the OAuth token and
+its reuse, pagination, private subreddits, and that the API key never ends up in a URL).
+The proxy tests stub `fetch`, so nothing in the suite touches the network.
+
 Use `npm run dev` rather than opening a build - the dev server proxies Reddit, and without
 that proxy the browser blocks the request. The long version of why is below.
 
