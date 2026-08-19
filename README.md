@@ -3,7 +3,7 @@
 
 Pick a subreddit, and this reads the mood of its 50 hottest post titles.
 
-**Live:** https://sports-orca-assignment-alpha.vercel.app
+**Live:** https://reddit-sentiment-analysis-suyash.vercel.app
 
 ![The dashboard scoring the top 50 hot posts of r/AskReddit](docs/dashboard.png)
 
