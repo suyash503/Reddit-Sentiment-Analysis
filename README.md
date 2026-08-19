@@ -1,4 +1,5 @@
-# The Subreddit Vibe Check
+# Reddit Sentiment Analysis
+
 
 Pick a subreddit, and this reads the mood of its 50 hottest post titles.
 
